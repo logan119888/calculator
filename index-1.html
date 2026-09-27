@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Red Button Calculator</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #555;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    .calculator {
+      width: min(92vw, 360px);
+      padding: 18px;
+      background: #666;
+      border-radius: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.35);
+    }
+
+    .display {
+      width: 100%;
+      min-height: 78px;
+      margin-bottom: 14px;
+      padding: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      overflow: hidden;
+      background: #222;
+      color: #fff;
+      border-radius: 12px;
+      font-size: 2rem;
+      font-weight: 600;
+      word-break: break-all;
+    }
+
+    .buttons {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+
+    button {
+      min-height: 58px;
+      border: 0;
+      border-radius: 12px;
+      background: #888;
+      color: white;
+      font-size: 1.2rem;
+      font-weight: bold;
+      cursor: pointer;
+      touch-action: manipulation;
+      transition: transform .08s, filter .08s;
+    }
+
+    button:hover { filter: brightness(1.08); }
+    button:active { transform: scale(.96); }
+
+    .red {
+      background: #d62828;
+    }
+
+    .equals {
+      background: #d62828;
+    }
+
+    .zero {
+      grid-column: span 2;
+    }
+
+    @media (max-width: 360px) {
+      .calculator { padding: 12px; }
+      .buttons { gap: 7px; }
+      button { min-height: 52px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="calculator" aria-label="Calculator">
+    <div id="display" class="display" aria-live="polite">0</div>
+
+    <div class="buttons">
+      <button class="red" data-action="clear">AC</button>
+      <button class="red" data-action="backspace">⌫</button>
+      <button class="red" data-value="%">%</button>
+      <button class="red" data-value="÷">÷</button>
+
+      <button data-value="7">7</button>
+      <button data-value="8">8</button>
+      <button data-value="9">9</button>
+      <button class="red" data-value="×">×</button>
+
+      <button data-value="4">4</button>
+      <button data-value="5">5</button>
+      <button data-value="6">6</button>
+      <button class="red" data-value="−">−</button>
+
+      <button data-value="1">1</button>
+      <button data-value="2">2</button>
+      <button data-value="3">3</button>
+      <button class="red" data-value="+">+</button>
+
+      <button class="zero" data-value="0">0</button>
+      <button data-value=".">.</button>
+      <button class="equals" data-action="equals">=</button>
+    </div>
+  </main>
+
+  <script>
+    (() => {
+      const display = document.getElementById("display");
+      let expression = "";
+      let justSolved = false;
+
+      function render() {
+        display.textContent = expression || "0";
+      }
+
+      function addValue(value) {
+        if (justSolved && !["+", "−", "×", "÷", "%"].includes(value)) {
+          expression = "";
+          justSolved = false;
+        }
+
+        if (value === ".") {
+          const currentNumber = expression.split(/[+−×÷]/).pop();
+          if (currentNumber.includes(".")) return;
+          if (!currentNumber) expression += "0";
+        }
+
+        if (["+", "−", "×", "÷"].includes(value)) {
+          if (!expression) return;
+          if (/[+−×÷]$/.test(expression)) {
+            expression = expression.slice(0, -1);
+          }
+          justSolved = false;
+        }
+
+        expression += value;
+        render();
+      }
+
+      function calculate() {
+        if (!expression || /[+−×÷.]$/.test(expression)) return;
+
+        try {
+          let math = expression
+            .replace(/×/g, "*")
+            .replace(/÷/g, "/")
+            .replace(/−/g, "-");
+
+          math = math.replace(
+            /(\d+(?:\.\d+)?)%/g,
+            "($1/100)"
+          );
+
+          if (!/^[0-9+*/().\-\s]+$/.test(math)) {
+            throw new Error("Invalid expression");
+          }
+
+          const result = Function(
+            '"use strict"; return (' + math + ')'
+          )();
+
+          if (!Number.isFinite(result)) {
+            throw new Error("Invalid result");
+          }
+
+          expression = String(
+            Math.round((result + Number.EPSILON) * 1e12) / 1e12
+          );
+
+          justSolved = true;
+          render();
+        } catch {
+          display.textContent = "Error";
+          expression = "";
+          justSolved = true;
+        }
+      }
+
+      function clearCalculator() {
+        expression = "";
+        justSolved = false;
+        render();
+      }
+
+      function backspace() {
+        expression = expression.slice(0, -1);
+        render();
+      }
+
+      document.querySelector(".buttons").addEventListener("click", (event) => {
+        const button = event.target.closest("button");
+        if (!button) return;
+
+        const action = button.dataset.action;
+        const value = button.dataset.value;
+
+        if (action === "clear") clearCalculator();
+        else if (action === "backspace") backspace();
+        else if (action === "equals") calculate();
+        else if (value !== undefined) addValue(value);
+      });
+
+      document.addEventListener("keydown", (event) => {
+        const key = event.key;
+
+        if (/^[0-9.]$/.test(key)) addValue(key);
+        else if (key === "+") addValue("+");
+        else if (key === "-") addValue("−");
+        else if (key === "*") addValue("×");
+        else if (key === "/") addValue("÷");
+        else if (key === "%") addValue("%");
+        else if (key === "Enter" || key === "=") calculate();
+        else if (key === "Backspace") backspace();
+        else if (key === "Escape") clearCalculator();
+      });
+    })();
+  </script>
+</body>
+</html>
